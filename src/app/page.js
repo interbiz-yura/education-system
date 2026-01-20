@@ -1,0 +1,110 @@
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+export default function LoginPage() {
+  const [employeeId, setEmployeeId] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [error, setError] = useState('')
+  const [user, setUser] = useState(null)
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setError('')
+
+    const { data, error: dbError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('birth_date', birthDate)
+      .eq('status', 'ACTIVE')
+      .single()
+
+    if (dbError || !data) {
+      setError('사번 또는 생년월일이 일치하지 않습니다.')
+      return
+    }
+
+    setUser(data)
+    localStorage.setItem('user', JSON.stringify(data))
+  }
+
+  if (user) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-4">
+        <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
+          <h1 className="text-xl font-bold text-green-600 mb-4">✅ 로그인 성공!</h1>
+          <div className="space-y-2 text-gray-700">
+            <p><span className="font-semibold">이름:</span> {user.name}</p>
+            <p><span className="font-semibold">사번:</span> {user.employee_id}</p>
+            <p><span className="font-semibold">권한:</span> {user.role}</p>
+            <p><span className="font-semibold">지점:</span> {user.branch_name}</p>
+            <p><span className="font-semibold">채널:</span> {user.channel}</p>
+          </div>
+          <button
+            onClick={() => {
+              setUser(null)
+              localStorage.removeItem('user')
+            }}
+            className="mt-4 w-full bg-gray-500 text-white py-2 rounded hover:bg-gray-600"
+          >
+            로그아웃
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+        <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">
+          📚 사내 교육 관리 시스템
+        </h1>
+        
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              사번
+            </label>
+            <input
+              type="text"
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              placeholder="사번 입력"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              비밀번호 (생년월일 6자리)
+            </label>
+            <input
+              type="password"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              placeholder="예: 901225"
+              maxLength={6}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
+          </div>
+
+          {error && (
+            <p className="text-red-500 text-sm">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold"
+          >
+            로그인
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
