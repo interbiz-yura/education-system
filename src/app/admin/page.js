@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
 import UserManagement from './users'
+import EventManagement from './events'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -258,12 +259,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UserManagement />}
 
         {/* 교육 일정 */}
-        {activeTab === 'events' && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold mb-4">📅 교육 일정 관리</h2>
-            <p className="text-gray-500">준비 중입니다...</p>
-          </div>
-        )}
+        {activeTab === 'events' && <EventManagement />}
       </main>
     </div>
   )
