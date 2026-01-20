@@ -1,17 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [employeeId, setEmployeeId] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [error, setError] = useState('')
-  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
     const { data, error: dbError } = await supabase
       .from('users')
@@ -23,37 +26,12 @@ export default function LoginPage() {
 
     if (dbError || !data) {
       setError('사번 또는 생년월일이 일치하지 않습니다.')
+      setLoading(false)
       return
     }
 
-    setUser(data)
     localStorage.setItem('user', JSON.stringify(data))
-  }
-
-  if (user) {
-    return (
-      <div className="min-h-screen bg-gray-100 p-4">
-        <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
-          <h1 className="text-xl font-bold text-green-600 mb-4">✅ 로그인 성공!</h1>
-          <div className="space-y-2 text-gray-700">
-            <p><span className="font-semibold">이름:</span> {user.name}</p>
-            <p><span className="font-semibold">사번:</span> {user.employee_id}</p>
-            <p><span className="font-semibold">권한:</span> {user.role}</p>
-            <p><span className="font-semibold">지점:</span> {user.branch_name}</p>
-            <p><span className="font-semibold">채널:</span> {user.channel}</p>
-          </div>
-          <button
-            onClick={() => {
-              setUser(null)
-              localStorage.removeItem('user')
-            }}
-            className="mt-4 w-full bg-gray-500 text-white py-2 rounded hover:bg-gray-600"
-          >
-            로그아웃
-          </button>
-        </div>
-      </div>
-    )
+    router.push('/dashboard')
   }
 
   return (
@@ -99,9 +77,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold disabled:bg-blue-300"
           >
-            로그인
+            {loading ? '로그인 중...' : '로그인'}
           </button>
         </form>
       </div>
