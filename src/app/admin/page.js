@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
 import UserManagement from './users'
 import EventManagement from './events'
+import ScoreManagement from './scores'
+import HQEducationManagement from './hqeducation'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -164,26 +166,38 @@ export default function AdminPage() {
 
       <main className="max-w-5xl mx-auto p-4">
         {/* 탭 */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setActiveTab('upload')}
-            className={`px-4 py-2 rounded ${activeTab === 'upload' ? 'bg-blue-600 text-white' : 'bg-white'}`}
-          >
-            📤 엑셀 업로드
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-4 py-2 rounded ${activeTab === 'users' ? 'bg-blue-600 text-white' : 'bg-white'}`}
-          >
-            👥 인원 관리
-          </button>
-          <button
-            onClick={() => setActiveTab('events')}
-            className={`px-4 py-2 rounded ${activeTab === 'events' ? 'bg-blue-600 text-white' : 'bg-white'}`}
-          >
-            📅 교육 일정
-          </button>
-        </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    onClick={() => setActiveTab('upload')}
+                    className={`px-4 py-2 rounded text-sm ${activeTab === 'upload' ? 'bg-blue-600 text-white' : 'bg-white'}`}
+                  >
+                    📤 인원 업로드
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className={`px-4 py-2 rounded text-sm ${activeTab === 'users' ? 'bg-blue-600 text-white' : 'bg-white'}`}
+                  >
+                    👥 인원 관리
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('scores')}
+                    className={`px-4 py-2 rounded text-sm ${activeTab === 'scores' ? 'bg-blue-600 text-white' : 'bg-white'}`}
+                  >
+                    📊 점수 업로드
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('hqedu')}
+                    className={`px-4 py-2 rounded text-sm ${activeTab === 'hqedu' ? 'bg-blue-600 text-white' : 'bg-white'}`}
+                  >
+                    🎓 본부교육
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('events')}
+                    className={`px-4 py-2 rounded text-sm ${activeTab === 'events' ? 'bg-blue-600 text-white' : 'bg-white'}`}
+                  >
+                    📅 교육 일정
+                  </button>
+                </div>
 
         {/* 엑셀 업로드 */}
         {activeTab === 'upload' && (
@@ -260,6 +274,13 @@ export default function AdminPage() {
 
         {/* 교육 일정 */}
         {activeTab === 'events' && <EventManagement />}
+        
+        {/* 점수 업로드 */}
+        {activeTab === 'scores' && <ScoreManagement />}
+
+        {/* 본부교육 */}
+        {activeTab === 'hqedu' && <HQEducationManagement />}
+
       </main>
     </div>
   )
