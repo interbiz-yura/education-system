@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function SRDashboard() {
+    const router = useRouter()  // ← 이 줄 추가!
     const [user, setUser] = useState(null)
     const [myEvents, setMyEvents] = useState([])
     const [myScores, setMyScores] = useState([])
@@ -46,21 +47,21 @@ export default function SRDashboard() {
   const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-  useEffect(() => {
+    useEffect(() => {
     const savedUser = localStorage.getItem('user')
     if (!savedUser) {
-      router.push('/')
-      return
+        router.push('/')
+        return
     }
     const parsed = JSON.parse(savedUser)
     if (parsed.role !== 'MANAGER' && parsed.role !== 'SUPER_ADMIN') {
-      router.push('/dashboard')
-      return
+        router.push('/dashboard')
+        return
     }
     setUser(parsed)
     loadMyData(parsed)
     loadTeamData(parsed)
-  }, [])
+    }, [router]) 
 
     const loadMyData = async (currentUser) => {
     const { data: events } = await supabase
