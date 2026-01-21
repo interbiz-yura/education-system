@@ -32,12 +32,11 @@ export default function LoginPage() {
 
     localStorage.setItem('user', JSON.stringify(data))
     
-    // 권한별 페이지 이동
-        if (data.role === 'SUPER_ADMIN') {
-          router.push('/admin')
-        } else {
-          router.push('/dashboard')
-        }
+    if (data.role === 'SUPER_ADMIN') {
+      router.push('/admin')
+    } else {
+      router.push('/dashboard')
+    }
   }
 
   return (
