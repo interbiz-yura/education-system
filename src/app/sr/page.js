@@ -381,26 +381,6 @@ export default function SRDashboard() {
           </div>
         </div>
 
-        {/* 일일화상교육 이수현황 */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="font-bold mb-3">📺 일일화상교육 이수현황 ({month + 1}월)</h3>
-          {dailyVideos.length === 0 ? (
-            <p className="text-gray-500 text-sm">이번 달 등록된 교육이 없습니다.</p>
-          ) : (
-            <div className="space-y-2">
-              {dailyVideos.map((video, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <p className="text-sm flex-1 truncate pr-2" title={video.video_name}>
-                    {video.video_name}
-                  </p>
-                  <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${video.is_completed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {video.is_completed ? '이수' : '미이수'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         {/* 담당 인원 교육 현황 (교육 중심) */}
         <div className="bg-white rounded-lg shadow p-4">

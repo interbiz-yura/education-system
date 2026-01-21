@@ -8,6 +8,7 @@ import UserManagement from './users'
 import EventManagement from './events'
 import ScoreManagement from './scores'
 import HQEducationManagement from './hqeducation'
+import RequestManagement from './requests'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -197,6 +198,13 @@ export default function AdminPage() {
                   >
                     📅 교육 일정
                   </button>
+                  <button
+                    onClick={() => setActiveTab('requests')}
+                    className={`px-4 py-2 rounded text-sm ${activeTab === 'requests' ? 'bg-blue-600 text-white' : 'bg-white'}`}
+                  >
+                    📋 변경 요청
+                  </button>
+                  {activeTab === 'requests' && <RequestManagement />}
                 </div>
 
         {/* 엑셀 업로드 */}
