@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import ExcelJS from 'exceljs'
 
 export default function SRDashboard() {
     const router = useRouter()  // ← 이 줄 추가!
@@ -29,6 +30,8 @@ export default function SRDashboard() {
     const [dailyVideoTab, setDailyVideoTab] = useState('my')
     const [myDailyVideos, setMyDailyVideos] = useState([])
     const [showAddTrainingModal, setShowAddTrainingModal] = useState(false)
+    const [showEditTrainingModal, setShowEditTrainingModal] = useState(false)
+    const [editingTraining, setEditingTraining] = useState(null)
     const [newTraining, setNewTraining] = useState({
     title: '',
     event_date: '',
@@ -41,6 +44,93 @@ export default function SRDashboard() {
     memo: '',
     selected_members: []
     })
+
+  
+    // ExcelJS를 사용한 스타일 적용 엑셀 생성 함수
+    const createStyledExcel = async (data, sheetName, fileName) => {
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet(sheetName)
+
+      if (data.length === 0) {
+        alert('다운로드할 데이터가 없습니다.')
+        return
+      }
+
+      // 컬럼 정의 (첫 번째 데이터 객체의 키를 기준으로)
+      const columns = Object.keys(data[0]).map(key => ({
+        header: key,
+        key: key,
+        width: 15 // 기본 너비
+      }))
+
+      worksheet.columns = columns
+
+      // 헤더 스타일 적용
+      worksheet.getRow(1).eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFD3D3D3' } // 연회색
+        }
+        cell.font = {
+          bold: true,
+          color: { argb: 'FF000000' }
+        }
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: 'center'
+        }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF808080' } },
+          bottom: { style: 'thin', color: { argb: 'FF808080' } },
+          left: { style: 'thin', color: { argb: 'FF808080' } },
+          right: { style: 'thin', color: { argb: 'FF808080' } }
+        }
+      })
+
+      // 데이터 추가
+      data.forEach(row => {
+        worksheet.addRow(row)
+      })
+
+      // 데이터 행 스타일 적용
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) { // 헤더 제외
+          row.eachCell((cell) => {
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FF808080' } },
+              bottom: { style: 'thin', color: { argb: 'FF808080' } },
+              left: { style: 'thin', color: { argb: 'FF808080' } },
+              right: { style: 'thin', color: { argb: 'FF808080' } }
+            }
+            cell.alignment = {
+              vertical: 'middle'
+            }
+          })
+        }
+      })
+
+      // 컬럼 너비 자동 조절
+      worksheet.columns.forEach(column => {
+        let maxLength = 10
+        column.eachCell({ includeEmpty: false }, (cell) => {
+          const cellValue = cell.value ? cell.value.toString() : ''
+          maxLength = Math.max(maxLength, cellValue.length)
+        })
+        column.width = Math.min(maxLength + 2, 50) // 최대 50
+      })
+
+      // 파일 다운로드
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      a.click()
+      window.URL.revokeObjectURL(url)
+    }
+      
 
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -62,6 +152,7 @@ export default function SRDashboard() {
     loadMyData(parsed)
     loadTeamData(parsed)
     }, [router]) 
+
 
     const loadMyData = async (currentUser) => {
     const { data: events } = await supabase
@@ -127,6 +218,8 @@ export default function SRDashboard() {
     const { data: assigns } = await supabase
       .from('training_assignments')
       .select('*')
+
+
     if (assigns) setAssignments(assigns)
 
     // 변경 요청 내역 로드
@@ -159,17 +252,17 @@ export default function SRDashboard() {
     router.push('/')
   }
 
-    const handleAddTraining = async () => {
+  const handleAddTraining = async () => {
     if (!newTraining.title || !newTraining.event_date) {
-        setMessage('교육명과 교육일은 필수입니다.')
-        setTimeout(() => setMessage(''), 3000)
-        return
+      setMessage('교육명과 교육일은 필수입니다.')
+      setTimeout(() => setMessage(''), 3000)
+      return
     }
 
     // 교육 이벤트 생성
     const { data: eventData, error: eventError } = await supabase
-        .from('training_events')
-        .insert({
+      .from('training_events')
+      .insert({
         title: newTraining.title,
         event_date: newTraining.event_date,
         start_time: newTraining.start_time || null,
@@ -180,24 +273,24 @@ export default function SRDashboard() {
         status: 'PUBLISHED',
         is_custom: true,
         created_by_sr: user.id
-        })
-        .select()
-        .single()
+      })
+      .select()
+      .single()
 
     if (eventError) {
-        setMessage('교육 추가 실패: ' + eventError.message)
-        setTimeout(() => setMessage(''), 3000)
-        return
+      setMessage('교육 추가 실패: ' + eventError.message)
+      setTimeout(() => setMessage(''), 3000)
+      return
     }
 
     // 대상자 배정
     if (newTraining.selected_members.length > 0) {
-        const assignments = newTraining.selected_members.map(memberId => ({
+      const assignments = newTraining.selected_members.map(memberId => ({
         user_id: memberId,
         event_id: eventData.id
-        }))
+      }))
 
-        await supabase
+      await supabase
         .from('training_assignments')
         .insert(assignments)
     }
@@ -205,6 +298,110 @@ export default function SRDashboard() {
     setMessage('✅ 교육이 추가되었습니다.')
     setShowAddTrainingModal(false)
     setNewTraining({
+      title: '',
+      event_date: '',
+      start_time: '',
+      end_time: '',
+      location_type: 'ZOOM',
+      meeting_id: '',
+      meeting_password: '0000',
+      location_detail: '',
+      memo: '',
+      selected_members: []
+    })
+    loadTeamData(user)
+    setTimeout(() => setMessage(''), 3000)
+  }
+
+    // 자체 교육 삭제
+    const handleDeleteTraining = async (trainingId) => {
+      if (!confirm('정말 삭제하시겠습니까?\n배정된 인원도 함께 삭제됩니다.')) return
+
+      const { error } = await supabase
+        .from('training_events')
+        .delete()
+        .eq('id', trainingId)
+        .eq('created_by_sr', user.id)
+
+      if (error) {
+        setMessage('❌ 삭제 실패: ' + error.message)
+      } else {
+        setMessage('✅ 삭제되었습니다.')
+        loadTeamData(user)
+      }
+      setTimeout(() => setMessage(''), 3000)
+    }
+
+    // 수정 모달 열기
+    const openEditModal = (training) => {
+      setShowAddTrainingModal(false)  // ← 이 줄 추가!
+      setEditingTraining(training.event)
+      setNewTraining({
+        title: training.event.title,
+        event_date: training.event.event_date,
+        start_time: training.event.start_time || '',
+        end_time: training.event.end_time || '',
+        location_type: training.event.meeting_id ? 'ZOOM' : 'OFFLINE',
+        meeting_id: training.event.meeting_id || '',
+        meeting_password: training.event.meeting_password || '0000',
+        location_detail: training.event.location_detail || '',
+        memo: training.event.memo || '',
+        selected_members: training.attendees.map(a => a.id)
+      })
+      setShowEditTrainingModal(true)
+    }
+    // 교육 수정
+    const handleEditTraining = async () => {
+
+      if (!newTraining.title || !newTraining.event_date) {
+        setMessage('교육명과 교육일은 필수입니다.')
+        setTimeout(() => setMessage(''), 3000)
+        return
+      }
+
+
+      // 교육 이벤트 수정
+      const { error: updateError } = await supabase
+        .from('training_events')
+        .update({
+          title: newTraining.title,
+          event_date: newTraining.event_date,
+          start_time: newTraining.start_time || null,
+          end_time: newTraining.end_time || null,
+          meeting_id: newTraining.location_type === 'ZOOM' ? newTraining.meeting_id : null,
+          meeting_password: newTraining.location_type === 'ZOOM' ? newTraining.meeting_password : null,
+          location_detail: newTraining.location_type === 'OFFLINE' ? newTraining.location_detail : null,
+        })
+        .eq('id', editingTraining.id)
+        .eq('created_by_sr', user.id)
+      if (updateError) {
+        setMessage('❌ 수정 실패: ' + updateError.message)
+        setTimeout(() => setMessage(''), 3000)
+        return
+      }
+
+      // 기존 배정 삭제
+      await supabase
+        .from('training_assignments')
+        .delete()
+        .eq('event_id', editingTraining.id)
+
+      // 새 배정 추가
+      if (newTraining.selected_members.length > 0) {
+        const assignments = newTraining.selected_members.map(memberId => ({
+          user_id: memberId,
+          event_id: editingTraining.id
+        }))
+
+        await supabase
+          .from('training_assignments')
+          .insert(assignments)
+      }
+
+      setMessage('✅ 교육이 수정되었습니다.')
+      setShowEditTrainingModal(false)
+      setEditingTraining(null)
+      setNewTraining({
         title: '',
         event_date: '',
         start_time: '',
@@ -215,9 +412,9 @@ export default function SRDashboard() {
         location_detail: '',
         memo: '',
         selected_members: []
-    })
-    loadTeamData(user)
-    setTimeout(() => setMessage(''), 3000)
+      })
+      loadTeamData(user)
+      setTimeout(() => setMessage(''), 3000)
     }
 
     const toggleMemberSelection = (memberId) => {
@@ -255,6 +452,10 @@ export default function SRDashboard() {
     const filteredMembers = selectedSR === '전체' ? teamMembers : teamMembers.filter(m => m.sr_name === selectedSR)
     
     teamEvents.forEach(evt => {
+
+
+
+      
       const eventDate = new Date(evt.event_date)
       const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate())
       
@@ -302,8 +503,12 @@ export default function SRDashboard() {
     const groups = {}
     const filteredMembers = selectedSR === '전체' ? teamMembers : teamMembers.filter(m => m.sr_name === selectedSR)
     
+
     teamEvents.forEach(evt => {
         const templateName = evt.training_templates?.name || '기타'
+        
+
+
         
         // 일일화상, 세일즈톡, 자체교육 제외
         if (templateName === '일일화상교육' || templateName === '세일즈톡 TEST') return
@@ -474,6 +679,20 @@ export default function SRDashboard() {
       return
     }
 
+    // 1. 기존에 같은 대상자/같은 교육에 대한 요청이 있으면 삭제
+    const { error: deleteError } = await supabase
+      .from('change_requests')
+      .delete()
+      .eq('user_id', selectedMember.id)
+      .eq('original_event_id', selectedEvent.id)
+      .eq('requested_by', user.id)
+
+    if (deleteError) {
+      console.log('기존 요청 삭제 실패:', deleteError.message)
+      // 에러가 있어도 계속 진행 (기존 요청이 없을 수도 있음)
+    }
+
+    // 2. 새 요청 추가
     const { error } = await supabase
       .from('change_requests')
       .insert({
@@ -482,31 +701,140 @@ export default function SRDashboard() {
         requested_event_id: newEventId,
         reason: changeReason,
         status: 'PENDING',
-        requested_by: user.id
+        requested_by: user.id,
+        requested_at: new Date().toISOString()
       })
 
     if (error) {
       setMessage('요청 실패: ' + error.message)
     } else {
-      setMessage('변경 요청이 등록되었습니다.')
+      setMessage('✅ 변경 요청이 등록되었습니다.')
       setShowChangeModal(false)
       setNewEventId('')
       setChangeReason('')
+      
       // 변경 요청 목록 새로고침
       const { data: requests } = await supabase
         .from('change_requests')
         .select('*')
         .eq('requested_by', user.id)
       if (requests) setChangeRequests(requests)
+      
+      // 전체 데이터 새로고침
+      loadTeamData(user)
     }
     setTimeout(() => setMessage(''), 3000)
   }
+    // 변경 요청 취소
+    const handleCancelRequest = async (requestId) => {
+      if (!confirm('변경 요청을 취소하시겠습니까?')) return
+
+      const { error } = await supabase
+        .from('change_requests')
+        .delete()
+        .eq('id', requestId)
+        .eq('status', 'PENDING')
+
+      if (error) {
+        setMessage('❌ 취소 실패: ' + error.message)
+      } else {
+        setMessage('✅ 변경 요청이 취소되었습니다.')
+        
+        // 변경 요청 내역 새로고침
+        const { data: requests } = await supabase
+          .from('change_requests')
+          .select('*')
+          .eq('requested_by', user.id)
+        if (requests) setChangeRequests(requests)
+        
+        loadTeamData(user)
+      }
+      setTimeout(() => setMessage(''), 3000)
+    }
+      
+    // 1. 담당 인원 교육 현황 엑셀 다운로드
+    const downloadTrainingExcel = async (group) => {
+      const data = group.attendees.map(member => {
+        const request = getChangeRequestStatus(member.id, member.eventId)
+        const event = group.events.find(e => e.event.id === member.eventId)?.event
+        
+        return {
+          '교육일': formatDate(member.eventDate),
+          '교육장': event?.meeting_id ? `ID: ${event.meeting_id}` : (event?.location_detail || '-'),
+          'SR': member.sr_name,
+          '지점': member.branch_name,
+          '직책': member.position,
+          '이름': member.name,
+          '요청상태': request?.status === 'PENDING' ? '변경 대기중' : 
+                      request?.status === 'APPROVED' ? '변경 승인됨' : 
+                      request?.status === 'REJECTED' ? '변경 반려됨' : '-'
+        }
+      })
+
+      const fileName = `${group.templateName}_${new Date().toISOString().slice(0,10)}.xlsx`
+      await createStyledExcel(data, '교육현황', fileName)
+    }
+
+    // 2. 자체 교육 엑셀 다운로드
+    const downloadCustomTrainingExcel = async (training) => {
+      const data = training.attendees.map(member => ({
+        '교육일': formatDate(member.eventDate),
+        '교육장': training.event.meeting_id ? `ID: ${training.event.meeting_id}` : (training.event.location_detail || '-'),
+        'SR': member.sr_name,
+        '지점': member.branch_name,
+        '직책': member.position,
+        '이름': member.name
+      }))
+
+      const fileName = `${training.event.title}_${new Date().toISOString().slice(0,10)}.xlsx`
+      await createStyledExcel(data, '자체교육', fileName)
+    }
+
+    // 3. 일일화상교육 (SR용) 엑셀 다운로드
+    const downloadMyDailyVideoExcel = async () => {
+      const data = myDailyVideos.map(video => ({
+        '영상명': video.video_name,
+        '상태': video.is_completed ? '이수' : '미이수',
+        '이수일': video.completion_date ? formatDate(video.completion_date) : '-'
+      }))
+
+      const fileName = `일일화상교육_SR용_${new Date().toISOString().slice(0,10)}.xlsx`
+      await createStyledExcel(data, '일일화상교육', fileName)
+    }
+
+    // 4. 일일화상교육 (담당 매니저) 엑셀 다운로드
+    const downloadTeamDailyVideoExcel = async () => {
+      const data = dailyVideoStatus.map(member => ({
+        'SR': member.sr_name,
+        '지점': member.branch_name,
+        '직책': member.position,
+        '이름': member.name,
+        '상태': member.status
+      }))
+
+      const fileName = `일일화상교육_매니저용_${new Date().toISOString().slice(0,10)}.xlsx`
+      await createStyledExcel(data, '일일화상교육', fileName)
+    }
+
+    // 5. 세일즈톡 TEST 엑셀 다운로드
+    const downloadSalesTalkExcel = async () => {
+      const data = salesTalkStatus.map(member => ({
+        'SR': member.sr_name,
+        '지점': member.branch_name,
+        '직책': member.position,
+        '이름': member.name,
+        '점수': member.status
+      }))
+
+      const fileName = `세일즈톡TEST_${new Date().toISOString().slice(0,10)}.xlsx`
+      await createStyledExcel(data, '세일즈톡TEST', fileName)
+    }
 
   const getChangeRequestStatus = (memberId, eventId) => {
     const request = changeRequests.find(
       r => r.user_id === memberId && r.original_event_id === eventId
     )
-    return request ? request.status : null
+    return request // 전체 request 객체 반환
   }
 
   const getStatusText = (status) => {
@@ -587,11 +915,9 @@ export default function SRDashboard() {
       <header className="bg-purple-600 text-white p-4 shadow">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <h1 className="text-lg font-bold">📚 SR 관리 페이지</h1>
-          <div className="flex gap-2">
-            <button onClick={handleLogout} className="text-sm bg-purple-700 px-3 py-1 rounded hover:bg-purple-800">
-              로그아웃
-            </button>
-          </div>
+          <button onClick={handleLogout} className="text-sm bg-purple-700 px-3 py-1 rounded hover:bg-purple-800">
+            로그아웃
+          </button>
         </div>
       </header>
 
@@ -811,23 +1137,27 @@ export default function SRDashboard() {
                 {/* 교육 타이틀 */}
                 <div className="p-3 bg-gray-100 flex justify-between items-center">
                     <span className="font-bold">{group.templateName}</span>
-                    <button className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs">
-                    엑셀 다운로드
+                    <button 
+                      onClick={() => downloadTrainingExcel(group)}
+                      className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs"
+                    >
+                      엑셀 다운로드
                     </button>
                 </div>
                 
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                     <thead className="bg-gray-50">
-                        <tr>
+                      <tr>
                         <th className="px-3 py-2 text-left">교육일</th>
                         <th className="px-3 py-2 text-left">교육장</th>
                         <th className="px-3 py-2 text-left">SR</th>
                         <th className="px-3 py-2 text-left">지점</th>
                         <th className="px-3 py-2 text-left">직책</th>
                         <th className="px-3 py-2 text-left">이름</th>
-                        <th className="px-3 py-2 text-left">변경</th>
-                        </tr>
+                        <th className="px-3 py-2 text-center">변경</th>
+                        <th className="px-3 py-2 text-center">요청 상태</th>
+                      </tr>
                     </thead>
                     <tbody>
                         {group.attendees.map((member, j) => {
@@ -878,20 +1208,69 @@ export default function SRDashboard() {
                             <td className="px-3 py-2 font-medium">{member.name}</td>
                             
                             {/* 변경 */}
-                            <td className="px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => openChangeModal(member, event)}
-                                    className="text-xs text-purple-600 hover:underline"
-                                >
-                                    날짜변경
-                                </button>
-                                {statusText && (
-                                    <span className={`px-2 py-0.5 rounded text-xs ${statusColor}`}>
-                                    {statusText}
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                onClick={() => openChangeModal(member, event)}
+                                className="text-xs text-purple-600 hover:underline"
+                              >
+                                날짜변경
+                              </button>
+                            </td>
+
+                            {/* 요청 상태 */}
+                            <td className="px-3 py-2 text-center">
+                              {(() => {
+                                const request = getChangeRequestStatus(member.id, member.eventId)
+                                
+                                // 대기중인 요청이 있음
+                                if (request && request.status === 'PENDING') {
+                                  return (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">
+                                        변경 대기중
+                                      </span>
+                                      <button
+                                        onClick={() => handleCancelRequest(request.id)}
+                                        className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+                                        title="요청 취소"
+                                      >
+                                        ❌
+                                      </button>
+                                    </div>
+                                  )
+                                }
+                                
+                                // 승인된 요청
+                                if (request && request.status === 'APPROVED') {
+                                  return (
+                                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                      변경 승인됨
                                     </span>
-                                )}
-                                </div>
+                                  )
+                                }
+                                
+                                // 반려된 요청
+                                if (request && request.status === 'REJECTED') {
+                                  return (
+                                    <span 
+                                      onClick={() => {
+                                        if (request.reject_reason) {
+                                          alert(`반려 사유:\n${request.reject_reason}`)
+                                        } else {
+                                          alert('반려 사유가 없습니다.')
+                                        }
+                                      }}
+                                      className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs cursor-pointer hover:bg-red-200"
+                                      title="클릭하여 반려 사유 확인"
+                                    >
+                                      변경 반려됨
+                                    </span>
+                                  )
+                                }
+                                
+                                // 요청 없음
+                                return <span className="text-xs text-gray-400">-</span>
+                              })()}
                             </td>
                             </tr>
                         )
@@ -922,23 +1301,33 @@ export default function SRDashboard() {
                         return (
                         <div key={i} className="border rounded-lg overflow-hidden">
                             {/* 교육 타이틀 */}
-                            <div className="p-3 bg-purple-100 flex justify-between items-center">
+                            <div className="p-3 bg-gray-100 flex justify-between items-center">
                             <div className="flex items-center gap-2">
-                                <span className="font-bold">{training.event.title}</span>
-                                <span className="text-sm text-gray-600">{formatDate(training.event.event_date)}</span>
-                                {isPassed && (
+                              <span className="font-bold">{training.event.title}</span>
+                              {isPassed && (
                                 <span className="px-2 py-1 rounded text-xs bg-gray-500 text-white">종료</span>
-                                )}
+                              )}
                             </div>
                             <div className="flex gap-2">
-                                <button className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs">
-                                엑셀 다운로드
+                                <button 
+                                  onClick={() => downloadCustomTrainingExcel(training)}
+                                  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs"
+                                >
+                                  엑셀 다운로드
+                                </button>  
+                                <button 
+                                  onClick={() => openEditModal(training)}
+                                  className="bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700 text-xs"
+                                >
+                                  수정
                                 </button>
-                                <button className="bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700 text-xs">
-                                수정
-                                </button>
-                                <button className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-xs">
-                                삭제
+
+
+                                <button 
+                                  onClick={() => handleDeleteTraining(training.event.id)}
+                                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-xs"
+                                >
+                                  삭제
                                 </button>
                             </div>
                             </div>
@@ -950,14 +1339,14 @@ export default function SRDashboard() {
                                 <div className="overflow-x-auto">
                                 <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
-                                    <tr>
+                                      <tr>
                                         <th className="px-3 py-2 text-left">교육일</th>
                                         <th className="px-3 py-2 text-left">교육장</th>
                                         <th className="px-3 py-2 text-left">SR</th>
                                         <th className="px-3 py-2 text-left">지점</th>
                                         <th className="px-3 py-2 text-left">직책</th>
                                         <th className="px-3 py-2 text-left">이름</th>
-                                    </tr>
+                                      </tr>
                                     </thead>
                                     <tbody>
                                     {training.attendees.map((member, j) => {
@@ -1030,9 +1419,18 @@ export default function SRDashboard() {
             {dailyVideoDeadline && (
                 <span className="text-sm text-gray-500">마감: {formatDate(dailyVideoDeadline)}</span>
             )}
-            <button className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs">
-                엑셀 ↓
-            </button>
+          <button 
+            onClick={() => {
+              if (dailyVideoTab === 'my') {
+                downloadMyDailyVideoExcel()
+              } else {
+                downloadTeamDailyVideoExcel()
+              }
+            }}
+            className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs"
+          >
+            엑셀 다운로드
+          </button>
             </div>
         </div>
 
@@ -1160,9 +1558,12 @@ export default function SRDashboard() {
           {salesTalkDeadline && (
             <span className="font-bold text-bold text-red-500">마감: {formatDate(salesTalkDeadline)}</span>
           )}
-          <button className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs">
-            엑셀 다운로드
-          </button>
+        <button 
+          onClick={downloadSalesTalkExcel}
+          className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-xs"
+        >
+          엑셀 다운로드
+        </button>
         </div>
       </div>
       
@@ -1267,14 +1668,198 @@ export default function SRDashboard() {
         </div>
         
     )}
-    
-    {/* 교육 추가 모달 */}
+
+      {/* 교육 추가 모달 */}
       {showAddTrainingModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full my-8">
             <h3 className="font-bold text-lg mb-4">➕ 자체 교육 추가</h3>
             
             <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* 교육명 */}
+              <div>
+                <label className="block text-sm font-medium mb-1">교육명 *</label>
+                <input
+                  type="text"
+                  value={newTraining.title}
+                  onChange={(e) => setNewTraining({...newTraining, title: e.target.value})}
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="예: 신제품 교육"
+                />
+              </div>
+
+              {/* 교육일 */}
+              <div>
+                <label className="block text-sm font-medium mb-1">교육일 *</label>
+                <input
+                  type="date"
+                  value={newTraining.event_date}
+                  onChange={(e) => setNewTraining({...newTraining, event_date: e.target.value})}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+
+              {/* 시간 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">시작 시간</label>
+                  <input
+                    type="time"
+                    value={newTraining.start_time}
+                    onChange={(e) => setNewTraining({...newTraining, start_time: e.target.value})}
+                    className="w-full border rounded px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">종료 시간</label>
+                  <input
+                    type="time"
+                    value={newTraining.end_time}
+                    onChange={(e) => setNewTraining({...newTraining, end_time: e.target.value})}
+                    className="w-full border rounded px-3 py-2"
+                  />
+                </div>
+              </div>
+
+              {/* 장소 유형 */}
+              <div>
+                <label className="block text-sm font-medium mb-2">장소</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      value="ZOOM"
+                      checked={newTraining.location_type === 'ZOOM'}
+                      onChange={(e) => setNewTraining({...newTraining, location_type: e.target.value})}
+                    />
+                    <span>ZOOM</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      value="OFFLINE"
+                      checked={newTraining.location_type === 'OFFLINE'}
+                      onChange={(e) => setNewTraining({...newTraining, location_type: e.target.value})}
+                    />
+                    <span>오프라인</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* ZOOM 정보 */}
+              {newTraining.location_type === 'ZOOM' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">회의 ID</label>
+                    <input
+                      type="text"
+                      value={newTraining.meeting_id}
+                      onChange={(e) => setNewTraining({...newTraining, meeting_id: e.target.value})}
+                      className="w-full border rounded px-3 py-2"
+                      placeholder="123 456 789"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">비밀번호</label>
+                    <input
+                      type="text"
+                      value={newTraining.meeting_password}
+                      onChange={(e) => setNewTraining({...newTraining, meeting_password: e.target.value})}
+                      className="w-full border rounded px-3 py-2"
+                      placeholder="0000"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 오프라인 장소 */}
+              {newTraining.location_type === 'OFFLINE' && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">교육장</label>
+                  <input
+                    type="text"
+                    value={newTraining.location_detail}
+                    onChange={(e) => setNewTraining({...newTraining, location_detail: e.target.value})}
+                    className="w-full border rounded px-3 py-2"
+                    placeholder="서울교육장"
+                  />
+                </div>
+              )}
+
+              {/* 대상자 선택 */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  대상자 선택 ({newTraining.selected_members.length}명 선택)
+                </label>
+                <div className="border rounded p-3 max-h-60 overflow-y-auto">
+                  <label className="flex items-center gap-2 mb-2 pb-2 border-b font-medium">
+                    <input
+                      type="checkbox"
+                      checked={newTraining.selected_members.length === teamMembers.length}
+                      onChange={toggleAllMembers}
+                    />
+                    <span>전체 선택 ({teamMembers.length}명)</span>
+                  </label>
+                  <div className="space-y-1">
+                    {teamMembers.map(member => (
+                      <label key={member.id} className="flex items-center gap-2 hover:bg-gray-50 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={newTraining.selected_members.includes(member.id)}
+                          onChange={() => toggleMemberSelection(member.id)}
+                        />
+                        <span className="text-sm">
+                          {member.sr_name} - {member.branch_name} - {member.position} - {member.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleAddTraining}
+                className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+              >
+                저장
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddTrainingModal(false)
+                  setNewTraining({
+                    title: '',
+                    event_date: '',
+                    start_time: '',
+                    end_time: '',
+                    location_type: 'ZOOM',
+                    meeting_id: '',
+                    meeting_password: '0000',
+                    location_detail: '',
+                    selected_members: []
+                  })
+                }}
+                className="flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 교육 수정 모달 */}
+      {showEditTrainingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+            <div 
+              className="bg-white rounded-lg p-6 max-w-2xl w-full my-8 max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+            <h3 className="font-bold text-lg mb-4">✏️ 자체 교육 수정</h3>
+            
+            {/* 스크롤 가능 영역 */}
+            <div className="space-y-4 overflow-y-auto flex-1 mb-4">
               {/* 교육명 */}
               <div>
                 <label className="block text-sm font-medium mb-1">교육명 *</label>
@@ -1429,16 +2014,21 @@ export default function SRDashboard() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-6">
+            {/* 버튼 영역 - 스크롤 밖에 고정 */}
+            <div className="flex gap-2 pt-4 border-t flex-shrink-0">
               <button
-                onClick={handleAddTraining}
+                type="button"
+                onClick={handleEditTraining}
                 className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
               >
-                저장
+                수정 완료
               </button>
               <button
+                type="button"
                 onClick={() => {
-                  setShowAddTrainingModal(false)
+                  console.log('취소 버튼 클릭!')
+                  setShowEditTrainingModal(false)
+                  setEditingTraining(null)
                   setNewTraining({
                     title: '',
                     event_date: '',

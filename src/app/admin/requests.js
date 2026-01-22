@@ -15,23 +15,126 @@ export default function RequestManagement() {
 
   const loadRequests = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('change_requests')
-      .select(`
-        *,
-        user:user_id(name, employee_id, branch_name),
-        requester:requested_by(name),
-        original_event:original_event_id(event_date, start_time, training_templates(name)),
-        requested_event:requested_event_id(event_date, start_time)
-      `)
-      .order('created_at', { ascending: false })
     
-    if (data) setRequests(data)
+    // 1. 먼저 기본 데이터만 조회
+    const { data: requests, error } = await supabase
+      .from('change_requests')
+      .select('*')
+      .order('requested_at', { ascending: false })
+    
+    if (error) {
+      console.error('변경 요청 로드 실패:', error)
+      setLoading(false)
+      returng
+    }
+
+    if (!requests || requests.length === 0) {
+      console.log('변경 요청 없음')
+      setRequests([])
+      setLoading(false)
+      return
+    }
+
+    console.log('✅ 로드된 변경 요청:', requests)
+
+    // 2. 추가 정보 조회
+    const enrichedRequests = await Promise.all(
+      requests.map(async (req) => {
+        // 사용자 정보
+        const { data: user } = await supabase
+          .from('users')
+          .select('name, employee_id, branch_name')
+          .eq('id', req.user_id)
+          .single()
+
+        // 요청자 정보
+        const { data: requester } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', req.requested_by)
+          .single()
+
+        // 원래 교육 정보
+        const { data: originalEvent } = await supabase
+          .from('training_events')
+          .select('event_date, start_time, template_id')
+          .eq('id', req.original_event_id)
+          .single()
+
+        // 원래 교육의 템플릿 정보
+        let originalTemplate = null
+        if (originalEvent?.template_id) {
+          const { data: template } = await supabase
+            .from('training_templates')
+            .select('name')
+            .eq('id', originalEvent.template_id)
+            .single()
+          originalTemplate = template
+        }
+
+        // 변경 요청 교육 정보
+        const { data: requestedEvent } = await supabase
+          .from('training_events')
+          .select('event_date, start_time')
+          .eq('id', req.requested_event_id)
+          .single()
+
+        return {
+          ...req,
+          user,
+          requester,
+          original_event: originalEvent ? {
+            ...originalEvent,
+            training_templates: originalTemplate
+          } : null,
+          requested_event: requestedEvent
+        }
+      })
+    )
+
+    console.log('✅ 상세 정보 포함:', enrichedRequests)
+    setRequests(enrichedRequests)
     setLoading(false)
   }
 
   const handleApprove = async (requestId) => {
-    const { error } = await supabase
+    // 1. 요청 정보 조회
+    const request = requests.find(r => r.id === requestId)
+    if (!request) {
+      setMessage('❌ 요청을 찾을 수 없습니다.')
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+
+    // 2. 기존 배정 삭제
+    const { error: deleteError } = await supabase
+      .from('training_assignments')
+      .delete()
+      .eq('user_id', request.user_id)
+      .eq('event_id', request.original_event_id)
+
+    if (deleteError) {
+      setMessage('❌ 기존 배정 삭제 실패: ' + deleteError.message)
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+
+    // 3. 새 배정 추가
+    const { error: insertError } = await supabase
+      .from('training_assignments')
+      .insert({
+        user_id: request.user_id,
+        event_id: request.requested_event_id
+      })
+
+    if (insertError) {
+      setMessage('❌ 새 배정 추가 실패: ' + insertError.message)
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+
+    // 4. 변경 요청 상태 업데이트
+    const { error: updateError } = await supabase
       .from('change_requests')
       .update({ 
         status: 'APPROVED',
@@ -39,10 +142,10 @@ export default function RequestManagement() {
       })
       .eq('id', requestId)
 
-    if (error) {
-      setMessage('승인 실패: ' + error.message)
+    if (updateError) {
+      setMessage('❌ 상태 업데이트 실패: ' + updateError.message)
     } else {
-      setMessage('승인되었습니다.')
+      setMessage('✅ 승인 완료! 교육 일정이 변경되었습니다.')
       loadRequests()
     }
     setTimeout(() => setMessage(''), 3000)
@@ -84,9 +187,10 @@ export default function RequestManagement() {
 
   const filteredRequests = requests.filter(r => {
     if (filter === 'ALL') return true
+    if (filter === 'PROCESSED') return r.status === 'APPROVED' || r.status === 'REJECTED'
     return r.status === filter
   })
-
+  
   const getStatusBadge = (status) => {
     switch (status) {
       case 'PENDING':
@@ -103,7 +207,7 @@ export default function RequestManagement() {
   const pendingCount = requests.filter(r => r.status === 'PENDING').length
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-6 w-full">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold">📋 변경 요청 관리</h2>
@@ -113,14 +217,29 @@ export default function RequestManagement() {
             </span>
           )}
         </div>
+        
+        {/* 통계 표시 */}
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500">대기:</span>
+            <span className="font-bold text-yellow-600">{requests.filter(r => r.status === 'PENDING').length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500">승인:</span>
+            <span className="font-bold text-green-600">{requests.filter(r => r.status === 'APPROVED').length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500">반려:</span>
+            <span className="font-bold text-red-600">{requests.filter(r => r.status === 'REJECTED').length}</span>
+          </div>
+        </div>
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="border rounded px-3 py-1 text-sm"
         >
           <option value="PENDING">대기중</option>
-          <option value="APPROVED">승인됨</option>
-          <option value="REJECTED">반려됨</option>
+          <option value="PROCESSED">처리 완료</option>
           <option value="ALL">전체</option>
         </select>
       </div>
@@ -166,7 +285,12 @@ export default function RequestManagement() {
                   </p>
                 )}
                 <p className="text-xs text-gray-400">
-                  요청자: {req.requester?.name} | 요청일: {formatDateTime(req.created_at)}
+                  요청자: {req.requester?.name} | 요청일: {formatDateTime(req.requested_at)}
+                  {req.processed_at && (
+                    <span className="ml-2">
+                      | 처리일: {formatDateTime(req.processed_at)}
+                    </span>
+                  )}
                 </p>
                 {req.status === 'REJECTED' && req.reject_reason && (
                   <p className="text-red-600 text-xs">
@@ -175,22 +299,22 @@ export default function RequestManagement() {
                 )}
               </div>
 
-              {req.status === 'PENDING' && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleApprove(req.id)}
-                    className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 text-sm"
-                  >
-                    승인
-                  </button>
-                  <button
-                    onClick={() => handleReject(req.id)}
-                    className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700 text-sm"
-                  >
-                    반려
-                  </button>
-                </div>
-              )}
+            {req.status === 'PENDING' && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleApprove(req.id)}
+                  className="w-20 bg-green-600 text-white py-1.5 rounded hover:bg-green-700 text-sm"
+                >
+                  승인
+                </button>
+                <button
+                  onClick={() => handleReject(req.id)}
+                  className="w-20 bg-red-600 text-white py-1.5 rounded hover:bg-red-700 text-sm"
+                >
+                  반려
+                </button>
+              </div>
+            )}
             </div>
           ))}
         </div>

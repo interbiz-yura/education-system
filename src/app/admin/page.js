@@ -165,7 +165,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto p-4">
+      <main className="max-w-7xl mx-auto p-4">
         {/* 탭 */}
                 <div className="flex flex-wrap gap-2 mb-4">
                   <button
