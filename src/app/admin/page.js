@@ -60,6 +60,33 @@ export default function AdminPage() {
     }
   }
 
+  // 인원 엑셀 양식 다운로드
+  const downloadUserTemplate = () => {
+    const template = [
+      {
+        '팀': '예시팀',
+        '담당': '영업1팀',
+        'SR': '김철수',
+        '채널': '홈플러스',
+        '지점명': '강남점',
+        'ID(사번)': '10001',
+        '직책': '매니저',
+        '사원명': '홍길동',
+        '근무상태': '재직',
+        '권한': '판매사원',
+        '입사일': '2020-01-01',
+        '생년월일': '1990-01-01',
+        '핸드폰': '010-1234-5678',
+        '이메일': 'hong@example.com'
+      }
+    ]
+
+    const ws = XLSX.utils.json_to_sheet(template)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '인원양식')
+    XLSX.writeFile(wb, '인원_업로드_양식.xlsx')
+  }
+
   const handleUploadUsers = async () => {
     if (!file) {
       setMessage('파일을 선택해주세요.')
@@ -409,18 +436,21 @@ export default function AdminPage() {
               {/* 인원 업로드 섹션 */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-bold mb-4">📤 인원 엑셀 업로드</h2>
-                
-                <div className="mb-4 p-4 bg-gray-50 rounded text-sm">
-                  <p className="font-semibold mb-2">엑셀 컬럼 형식:</p>
-                  <p className="text-gray-600">팀 / 담당 / SR / 채널 / 지점명 / ID(사번) / 직책 / 사원명 / 근무상태 / 입사일 / 생년월일 / 핸드폰 / 이메일</p>
+        
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={downloadUserTemplate}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm whitespace-nowrap"
+                  >
+                    양식 다운로드
+                  </button>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileChange}
+                    className="flex-1 block text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:text-sm"
+                  />
                 </div>
-
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={handleFileChange}
-                  className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
 
                 {preview.length > 0 && (
                   <div className="mb-4 overflow-x-auto">
@@ -462,13 +492,13 @@ export default function AdminPage() {
                 <button
                   onClick={handleUploadUsers}
                   disabled={loading || !file}
-                  className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-gray-300"
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:bg-gray-300 text-sm"
                 >
                   {loading ? '업로드 중...' : '업로드 및 적용'}
                 </button>
 
                 {message && (
-                  <p className={`mt-4 font-semibold ${message.includes('실패') ? 'text-red-600' : 'text-green-600'}`}>
+                  <p className={`mt-3 font-semibold ${message.includes('실패') ? 'text-red-600' : 'text-green-600'}`}>
                     {message}
                   </p>
                 )}
